@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { BookOpen, GraduationCap } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { BookOpen, GraduationCap, Users, DollarSign, Home, BookMarked, HeadphonesIcon } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   id: string;
@@ -21,6 +24,70 @@ const Chat = () => {
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [documents, setDocuments] = useState<any[]>([]);
+
+  const commonQuestions = [
+    { 
+      id: 1, 
+      question: "When does the academic year start?", 
+      category: "academics", 
+      icon: BookMarked, 
+      color: "bg-blue-500/10 text-blue-600 border-blue-200" 
+    },
+    { 
+      id: 2, 
+      question: "How do I apply for financial aid?", 
+      category: "finance", 
+      icon: DollarSign, 
+      color: "bg-green-500/10 text-green-600 border-green-200" 
+    },
+    { 
+      id: 3, 
+      question: "What housing options are available?", 
+      category: "housing", 
+      icon: Home, 
+      color: "bg-purple-500/10 text-purple-600 border-purple-200" 
+    },
+    { 
+      id: 4, 
+      question: "How do I register for classes?", 
+      category: "enrollment", 
+      icon: Users, 
+      color: "bg-orange-500/10 text-orange-600 border-orange-200" 
+    },
+    { 
+      id: 5, 
+      question: "What library services are available?", 
+      category: "services", 
+      icon: BookOpen, 
+      color: "bg-indigo-500/10 text-indigo-600 border-indigo-200" 
+    },
+    { 
+      id: 6, 
+      question: "Where can I get academic support?", 
+      category: "support", 
+      icon: HeadphonesIcon, 
+      color: "bg-pink-500/10 text-pink-600 border-pink-200" 
+    }
+  ];
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setDocuments(data || []);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    }
+  };
 
   const handleSendMessage = async (message: string) => {
     const userMessage: Message = {
@@ -33,18 +100,51 @@ const Chat = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response - this will be replaced with actual RAG functionality
-    setTimeout(() => {
+    try {
+      // Store the user query in the database
+      await supabase
+        .from('student_queries')
+        .insert([{ question: message }]);
+
+      // Search for relevant documents based on the query
+      const relevantDocs = documents.filter(doc => 
+        doc.content.toLowerCase().includes(message.toLowerCase()) ||
+        doc.title.toLowerCase().includes(message.toLowerCase()) ||
+        doc.category.toLowerCase().includes(message.toLowerCase())
+      );
+
+      let responseContent = "";
+      if (relevantDocs.length > 0) {
+        const bestMatch = relevantDocs[0];
+        responseContent = `Based on our Student Resource Book, here's what I found:\n\n**${bestMatch.title}**\n\n${bestMatch.content}`;
+      } else {
+        responseContent = "I couldn't find specific information about that in our Student Resource Book. Could you try rephrasing your question or ask about academic calendar, enrollment, financial aid, housing, library services, or student support?";
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "I understand you're asking about the Student Resource Book. To provide accurate answers from our college database, I need to connect to the knowledge base first. Please ensure the RAG system is properly configured with Supabase to access the student resource documents.",
+        content: responseContent,
         isUser: false,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       
       setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error processing message:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "I'm sorry, I encountered an error while processing your question. Please try again.",
+        isUser: false,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+  };
+
+  const handleQuestionClick = (question: string) => {
+    handleSendMessage(question);
   };
 
   return (
@@ -70,6 +170,46 @@ const Chat = () => {
           </div>
         </div>
       </header>
+
+      {/* Common Questions Section */}
+      {messages.length === 1 && (
+        <div className="max-w-4xl mx-auto w-full px-4 py-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-foreground mb-3">Common Questions</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Click on any question below to get started, or type your own question.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {commonQuestions.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Card 
+                    key={item.id} 
+                    className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.02] ${item.color} border`}
+                    onClick={() => handleQuestionClick(item.question)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-background/50">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium leading-relaxed">
+                            {item.question}
+                          </p>
+                          <Badge variant="secondary" className="mt-2 text-xs">
+                            {item.category}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chat Messages */}
       <div className="flex-1 max-w-4xl mx-auto w-full">
