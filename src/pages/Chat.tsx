@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
+import { ProcessPDF } from "@/components/ProcessPDF";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +19,7 @@ const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
-      content: "Hello! I'm your Student Resource Book assistant. I can help you find information about college policies, academic programs, student services, campus facilities, and much more. What would you like to know?",
+      content: "Hello! I'm your Student Resource Book assistant. I can help you find information about NMIMS policies, academic programs, student services, campus facilities, and much more. What would you like to know?",
       isUser: false,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
@@ -29,42 +30,42 @@ const Chat = () => {
   const commonQuestions = [
     { 
       id: 1, 
-      question: "When does the academic year start?", 
+      question: "What are the attendance requirements at NMIMS?", 
       category: "academics", 
       icon: BookMarked, 
       color: "bg-blue-500/10 text-blue-600 border-blue-200" 
     },
     { 
       id: 2, 
-      question: "How do I apply for financial aid?", 
+      question: "What are the guidelines for scholarships and financial aid?", 
       category: "finance", 
       icon: DollarSign, 
       color: "bg-green-500/10 text-green-600 border-green-200" 
     },
     { 
       id: 3, 
-      question: "What housing options are available?", 
-      category: "housing", 
+      question: "What are the rules for using campus facilities?", 
+      category: "campus", 
       icon: Home, 
       color: "bg-purple-500/10 text-purple-600 border-purple-200" 
     },
     { 
       id: 4, 
-      question: "How do I register for classes?", 
+      question: "How do I register for courses and electives?", 
       category: "enrollment", 
       icon: Users, 
       color: "bg-orange-500/10 text-orange-600 border-orange-200" 
     },
     { 
       id: 5, 
-      question: "What library services are available?", 
+      question: "What are the library rules and regulations?", 
       category: "services", 
       icon: BookOpen, 
       color: "bg-indigo-500/10 text-indigo-600 border-indigo-200" 
     },
     { 
       id: 6, 
-      question: "Where can I get academic support?", 
+      question: "What support services are available for students?", 
       category: "support", 
       icon: HeadphonesIcon, 
       color: "bg-pink-500/10 text-pink-600 border-pink-200" 
@@ -72,20 +73,29 @@ const Chat = () => {
   ];
 
   useEffect(() => {
-    fetchDocuments();
+    // Remove the automatic document fetching since we now search on demand
   }, []);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = async (query: string) => {
     try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .order('created_at', { ascending: false });
+      console.log('Searching with query:', query);
       
-      if (error) throw error;
-      setDocuments(data || []);
+      // Use the new semantic search function
+      const { data, error } = await supabase.functions.invoke('semantic-search', {
+        body: { query, limit: 5 }
+      });
+
+      if (error) {
+        console.error('Semantic search error:', error);
+        return [];
+      }
+
+      const results = data?.results || [];
+      console.log('Search results:', results);
+      return results;
     } catch (error) {
-      console.error('Error fetching documents:', error);
+      console.error('Error in fetchDocuments:', error);
+      return [];
     }
   };
 
@@ -106,19 +116,22 @@ const Chat = () => {
         .from('student_queries')
         .insert([{ question: message }]);
 
-      // Search for relevant documents based on the query
-      const relevantDocs = documents.filter(doc => 
-        doc.content.toLowerCase().includes(message.toLowerCase()) ||
-        doc.title.toLowerCase().includes(message.toLowerCase()) ||
-        doc.category.toLowerCase().includes(message.toLowerCase())
-      );
+      // Search for relevant documents using semantic search
+      const relevantDocs = await fetchDocuments(message);
 
       let responseContent = "";
       if (relevantDocs.length > 0) {
-        const bestMatch = relevantDocs[0];
-        responseContent = `Based on our Student Resource Book, here's what I found:\n\n**${bestMatch.title}**\n\n${bestMatch.content}`;
+        // Use the most relevant document(s)
+        const topDocs = relevantDocs.slice(0, 3);
+        const context = topDocs.map(doc => doc.content).join('\n\n');
+        
+        responseContent = `Based on the NMIMS Student Resource Book, here's what I found:\n\n${context}`;
+        
+        if (topDocs.length > 1) {
+          responseContent += `\n\n*This information is compiled from ${topDocs.length} relevant sections of the Student Resource Book.*`;
+        }
       } else {
-        responseContent = "I couldn't find specific information about that in our Student Resource Book. Could you try rephrasing your question or ask about academic calendar, enrollment, financial aid, housing, library services, or student support?";
+        responseContent = "I couldn't find specific information about that in the NMIMS Student Resource Book. This might be because the document hasn't been processed yet, or your question might be about something not covered in the current document. Could you try rephrasing your question or ask about attendance rules, academic guidelines, library policies, or student services?";
       }
 
       const assistantMessage: Message = {
@@ -174,6 +187,10 @@ const Chat = () => {
       {/* Common Questions Section */}
       {messages.length === 1 && (
         <div className="max-w-4xl mx-auto w-full px-4 py-6">
+          <div className="mb-8">
+            <ProcessPDF />
+          </div>
+          
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-foreground mb-3">Common Questions</h2>
             <p className="text-sm text-muted-foreground mb-4">
