@@ -116,22 +116,35 @@ const Chat = () => {
         .from('student_queries')
         .insert([{ question: message }]);
 
-      // Search for relevant documents using semantic search
-      const relevantDocs = await fetchDocuments(message);
+      // Get a concise answer via the answer-question function (top_k kept small for precision)
+      const { data: answerData, error: answerError } = await supabase.functions.invoke('answer-question', {
+        body: { query: message, top_k: 8 }
+      });
 
       let responseContent = "";
-      if (relevantDocs.length > 0) {
-        // Use the most relevant document(s)
-        const topDocs = relevantDocs.slice(0, 3);
-        const context = topDocs.map(doc => doc.content).join('\n\n');
-        
-        responseContent = `Based on the NMIMS Student Resource Book, here's what I found:\n\n${context}`;
-        
-        if (topDocs.length > 1) {
-          responseContent += `\n\n*This information is compiled from ${topDocs.length} relevant sections of the Student Resource Book.*`;
+
+      const needsFallback = !!answerError || !answerData || answerData?.success === false || !answerData?.answer;
+      if (needsFallback) {
+        if (answerError) console.error('Answer generation error:', answerError);
+        // Fallback: use semantic search and then call the formatter with a context override
+        const relevantDocs = await fetchDocuments(message);
+        if (relevantDocs.length > 0) {
+          const top = relevantDocs.slice(0, 8);
+          const contextOverride = top.map((d: any) => d.content);
+          const { data: fallbackData, error: fallbackError } = await supabase.functions.invoke('answer-question', {
+            body: { query: message, top_k: 8, contextOverride }
+          });
+          if (!fallbackError && fallbackData?.answer) {
+            responseContent = fallbackData.answer.trim();
+          } else {
+            responseContent = "I couldn't find that in the Student Resource Book. Please rephrase or ask a simpler follow-up.";
+          }
+        } else {
+          responseContent = "I couldn't find that in the Student Resource Book. Please rephrase or ask a simpler follow-up.";
         }
       } else {
-        responseContent = "I couldn't find specific information about that in the NMIMS Student Resource Book. This might be because the document hasn't been processed yet, or your question might be about something not covered in the current document. Could you try rephrasing your question or ask about attendance rules, academic guidelines, library policies, or student services?";
+        responseContent = (answerData?.answer || "I couldn't generate an answer right now.").trim();
+        // Keep replies clean; no inline sources
       }
 
       const assistantMessage: Message = {

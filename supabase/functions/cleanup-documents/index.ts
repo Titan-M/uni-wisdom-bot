@@ -13,40 +13,45 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfContent, title = "NMIMS Student Resource Book" } = await req.json();
-    
-    if (!pdfContent) {
-      throw new Error('PDF content is required');
-    }
+    const { category, title_pattern } = await req.json();
 
-    // Initialize Supabase client  
+    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log(`Processing PDF: "${title}"`);
+    console.log(`Cleaning up documents with category: ${category}, title pattern: ${title_pattern}`);
 
-    // Call the generate-embeddings function to process the content
-    const { data, error } = await supabase.functions.invoke('generate-embeddings', {
-      body: {
-        content: pdfContent,
-        title: title,
-        category: 'University Policy'
-      }
-    });
+    // Build the delete query based on parameters
+    let query = supabase.from('documents').delete();
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    if (title_pattern) {
+      query = query.like('title', title_pattern);
+    }
+
+    // If no filters provided, delete all documents (be careful!)
+    if (!category && !title_pattern) {
+      query = query.neq('id', '00000000-0000-0000-0000-000000000000'); // This will delete all records
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
-      console.error('Error calling generate-embeddings:', error);
+      console.error('Database cleanup error:', error);
       throw error;
     }
 
-    console.log('PDF processing completed:', data);
+    console.log(`Successfully deleted ${count || 0} documents`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: `Successfully processed PDF: "${title}"`,
-        data: data
+        message: `Successfully deleted ${count || 0} documents`,
+        deleted_count: count || 0
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -55,7 +60,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in process-pdf function:', error);
+    console.error('Error in cleanup-documents function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
       JSON.stringify({ 

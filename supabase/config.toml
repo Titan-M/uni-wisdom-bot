@@ -1,10 +1,14 @@
 project_id = "ktlcoubmzodellhquhgb"
 
-[functions.generate-embeddings]
-verify_jwt = false
-
 [functions.semantic-search]
 verify_jwt = false
 
-[functions.process-pdf]
+
+[functions.cleanup-documents]
+verify_jwt = false
+
+[functions.process-complete-pdf]
+verify_jwt = false
+
+[functions.answer-question]
 verify_jwt = false
