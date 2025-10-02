@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
-import { ProcessPDF } from "@/components/ProcessPDF";
+// import { ProcessPDF } from "@/components/ProcessPDF";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -200,9 +200,9 @@ const Chat = () => {
       {/* Common Questions Section */}
       {messages.length === 1 && (
         <div className="max-w-4xl mx-auto w-full px-4 py-6">
-          <div className="mb-8">
+          {/* <div className="mb-8">
             <ProcessPDF />
-          </div>
+          </div> */}
           
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-foreground mb-3">Common Questions</h2>

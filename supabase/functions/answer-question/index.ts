@@ -192,7 +192,7 @@ Answer:`;
       const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
         method: 'GET',
         headers: {
-          'x-goog-api-key': geminiApiKey,
+          'x-goog-api-key': geminiApiKey!,
         },
       });
       if (!res.ok) {
@@ -243,7 +243,7 @@ Answer:`;
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-goog-api-key': geminiApiKey,
+            'x-goog-api-key': geminiApiKey!,
           },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
